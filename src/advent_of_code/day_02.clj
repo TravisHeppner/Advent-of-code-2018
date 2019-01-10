@@ -1,4 +1,4 @@
-(ns advent-of-code.day2
+(ns advent-of-code.day-02
   (:require
     [clojure.java.io :as io]))
 
