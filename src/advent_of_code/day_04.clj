@@ -51,7 +51,6 @@
                             (map-indexed #(hash-map :minute % :shifts-asleep %2)))]
            {:guard            guard
             :minutes-asleep   (->> v (mapcat :minutes) (filter identity) count)
-            :minutes-awake    (->> v (mapcat :minutes) (remove identity) count)
             :shifts           (count v)
             :asleep-on-minute minutes})) guards))
 
