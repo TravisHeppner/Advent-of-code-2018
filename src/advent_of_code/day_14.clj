@@ -1,15 +1,20 @@
 (ns advent-of-code.day-14
   (:require [clojure.string :as cs]))
 
-(defmacro debug
-  [expr]
-  `(let [start# (. System (nanoTime))
-         ret# ~expr]
-     (prn "-------------Start Debug-------------")
-     (clojure.pprint/pprint ret#)
-     (prn (str "Elapsed time: " (/ (double (- (. System (nanoTime)) start#)) 1000000.0) " msecs"))
-     (prn "--------------End Debug--------------")
-     ret#))
+(defn print-state [{:keys [elves sorted-recipes] :as state}]
+  (println
+    (cs/join
+      (map-indexed #(let [wrap (cond
+                                 (= %1 (first elves)) "(%d)"
+                                 (= %1 (second elves)) "[%d]"
+                                 :default " %d ")]
+                      (format wrap %2)) (reverse sorted-recipes)))))
+
+(def initial-state
+  {:elves [0 1]
+   :recipes {0 3 1 7}
+   :sorted-recipes '(7 3)
+   :num-recipes 2})
 
 (defn add-recipes [elf1 elf2]
   (let [x (+ elf1 elf2)
@@ -19,111 +24,42 @@
       [d2]
       [d1 d2])))
 
-(def starting-recipes (zipmap [0 1] [3 7]))
-
-(defn update-recipes [{:keys [elves recipes] :as state}]
-  (assoc
-    state :recipes
-    (->> (map #(get recipes %) elves)
-         (apply add-recipes )
-         (zipmap (range (count recipes) (+ 3 (count recipes))))
-         (merge recipes))))
-
-(defn update-elves [{:keys [elves recipes] :as state}]
-  (update
-    state :elves
-    #(map (fn [elf]
-            (-> (recipes elf)
-                (+ elf 1)
-                (mod (count recipes)))) %)))
-
-(defn update-state [{:keys [elves recipes] :as state}]
-  (-> state
-      update-recipes
-      update-elves))
-
-(defn scores-after [after num-after]
-  (->> (iterate update-state {:elves [0 1] :recipes starting-recipes})
-       (drop-while #(->> (:recipes %)
-                         (count)
-                         (>= (+ num-after after))))
-       first
-       :recipes
-       (drop after)
-       (take num-after)
-       (map str)
-       cs/join))
-
-(defn scores-before-seq [before]
-  (let [pattern (->> before str (mapv (comp read-string str))) ]
-    (->> (iterate update-state {:elves [0 1] :recipes starting-recipes})
-         (drop 100000000)
-         first
-         :recipes
-         (#(map (fn [i] (get % i)) (range (count %))))
-         (partition-all (count pattern) 1)
-         (take-while #(not= pattern (into [] %)))
-         count
-         ;(drop-while (fn [{:keys [recipes]}]
-         ;              (let [thing1 (take-last (count pattern) recipes)
-         ;                    thing2 (drop-last (take-last (inc (count pattern)) recipes))]
-         ;                (not
-         ;                  (or
-         ;                    (= thing1 pattern)
-         ;                    (= thing2 pattern))))))
-         ;first
-         ;:recipes
-         ;((juxt count #(take-last (+ 3 (count pattern)) %)))
-         )))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;debugs;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn print-state [{:keys [elves recipes] :as state}]
-  (println
-    (cs/join
-      (map-indexed #(let [wrap (cond
-                                 (= %1 (first elves)) "(%d)"
-                                 (= %1 (second elves)) "[%d]"
-                                 :default " %d ")]
-                      (format wrap %2)) recipes))))
+(defn step [{:keys [recipes num-recipes] [elf1 elf2] :elves :as state}]
+  (let [nums (add-recipes (get recipes elf1) (get recipes elf2))]
+    (-> (reduce (fn [state [i recipe]] (-> (assoc-in state [:recipes i] recipe)
+                                           (update-in [:sorted-recipes] conj recipe))) state (map-indexed (fn [i n] [(+ i num-recipes) n]) nums))
+        (update :num-recipes #(+ % (count nums)))
+        (update-in [:elves 0] (fn [r] (mod (+ r (get recipes r) 1) (+ (count nums) num-recipes))))
+        (update-in [:elves 1] (fn [r] (mod (+ r (get recipes r) 1) (+ (count nums) num-recipes)))))))
 
 (defn print-example []
-  (->> (iterate update-state {:elves [0 1] :recipes [3 7]})
-       (take-while #(->> (:recipes %)
-                         (count)
-                         (>= (+ 20))))
+  (->> (iterate step initial-state)
+       (take-while #(<= (:num-recipes %) (+ 20)))
        (map print-state)))
-;(print-example)
 
+(comment
+  ;part-1
+  (->> (iterate step initial-state)
+       (take 100000)
+       (drop-while #(> (+ 77201 10) (:num-recipes %)))
+       first
+       :recipes
+       ((fn [recipes] (map (fn [i] (get recipes i)) (range 77201 77211)))))
 
-;part-1
-;(for [after [[9    "5158916779"]
-;             [5    "0124515891"]
-;             [18   "9251071085"]
-;             [2018 "5941429882"]]]
-;  (let [result (scores-after (first after) 10)]
-;    (concat
-;      [(= result (second after))]
-;      after
-;      [result])))
-
-;part-2
-;(for [before [["51589" 9]
-;              ["01245" 5]
-;              ["92510" 18]
-;              ;["59414" 2018]
-;              ]]
-;  (let [result (scores-before-seq (first before))]
-;    (concat
-;      [(= result (second before))]
-;      before
-;      [result])))
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;answers;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;(def part-1 (scores-after 77201 10))
-
-;(def part-2 (scores-before-seq "077201"))
+  ;part-2
+  (let [pattern [0 7 7 2 0 1]
+        digits (count pattern)
+        flipped (reverse pattern)]
+    (->> (iterate step initial-state)
+         (take 1000000000)
+         (drop 100000000)
+         (map (fn [{:keys [sorted-recipes num-recipes]}]
+                (let [first-possibility (take digits sorted-recipes)
+                      second-possibility (take digits (rest sorted-recipes))]
+                  (cond
+                    (= flipped first-possibility) (- num-recipes digits)
+                    (= flipped second-possibility) (- num-recipes digits 1)
+                    :default nil))))
+         (drop-while nil?)
+         first))
+  )
